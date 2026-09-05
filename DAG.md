@@ -1,154 +1,473 @@
-# 供应链网络架构（Q2 传播研究闭合版）
+# 供应链网络架构
 
-> 目标：在保留 `M → P → M` 基本结构的前提下，使网络在给定初始状态与局部冲击后能够唯一演化，从而研究冲击的传播时间、传播范围、传播幅度与恢复过程。
+## 1. 总体结构
 
----
-
-# 1. 总体结构
-
-网络分为四层：
+供应链网络表示为一张带静态物理属性、并可沿统一时间轴运行的有向无环图（DAG）。整个架构由四个层次组成：
 
 \[
 \boxed{
-\text{生产拓扑}
-\rightarrow
-\text{静态物理参数}
-\rightarrow
-\text{动态状态}
-\rightarrow
-\text{传播过程}
+\text{单源生产 DAG}
+\longrightarrow
+\text{多源生产 DAG}
+\longrightarrow
+\text{镶嵌静态物理属性的 DAG}
+\longrightarrow
+\text{随时间演化的动力学系统}
 }
 \]
 
-当前核心研究对象仍然是生产网络的物理传播机制，不引入价格、企业博弈、采购优化或恢复优化。
-
----
-
-# 2. 基本生产网络
-
-基本结构保持为：
+网络中只保留两类节点：
 
 \[
 \boxed{
-M\rightarrow P\rightarrow M
+M=\text{Material-State-at-Location / 可用物料库存状态}
 }
 \]
 
-其中：
-
 \[
-M=\text{Material-State-at-Location}
+\boxed{
+P=\text{Production Process / 生产流程}
+}
 \]
 
-表示某种物料在给定位置、给定状态下的可用库存。
+\(M\) 表示某种物料在某个位置、某种状态下的独立可用库存，可积累并等待后续调用；\(P\) 表示生产工艺，用于完成物料转换。
+
+所有有向边都具有运输行为。只要物料沿一条边从上游对象移动到下游对象，该边就保存运输能力和运输 delay。与生产流程 \(P\) 相连的边还同时承担投入或产出的计量关系：
 
 \[
-P=\text{Production Process}
+\boxed{
+M\rightarrow P:
+\text{运输}+\text{投入系数}
+}
 \]
 
-表示将一组输入物料转换为一组输出物料的生产工艺。
+\[
+\boxed{
+P\rightarrow M:
+\text{产出系数}+\text{运输}
+}
+\]
+
+\[
+\boxed{
+M\rightarrow M:
+\text{纯运输}
+}
+\]
+
+当一个 \(P\) 的同一种产出需要供给多个下游生产流程时，对应的 \(P\rightarrow M\) 分支边还保存配给比例，用于描述该产出在各下游分支之间的分配。
+
+当前核心范围包括网络结构、静态物理属性和动力学。用于控制网络结构的生成参数、经济策略、采购策略、优化和恢复决策暂不纳入核心 DAG。
+
+---
+
+## 2. 单源生产网络
+
+最基本的生产单元为：
+
+\[
+\boxed{
+M^{in}\rightarrow P\rightarrow M^{out}
+}
+\]
+
+其中 \(M^{in}\) 是进入生产流程之前的可用输入库存，\(M^{out}\) 是生产输出经过对应运输边后进入的可用输出库存。
+
+当两个生产流程连续连接时，标准结构固定为：
+
+\[
+\boxed{
+P_i
+\rightarrow
+M_{ij}^{(1)}
+\rightarrow
+M_{ij}^{(2)}
+\rightarrow
+P_j
+}
+\]
+
+完整地写入前后生产单元后：
+
+\[
+\boxed{
+M_i^{in}
+\rightarrow
+P_i
+\rightarrow
+M_{ij}^{(1)}
+\rightarrow
+M_{ij}^{(2)}
+\rightarrow
+P_j
+\rightarrow
+M_j^{out}
+}
+\]
+
+两个相邻生产流程之间保留两个独立的 \(M\)。
+
+第一个库存：
+
+\[
+M_{ij}^{(1)}
+\]
+
+表示上游 \(P_i\) 完成生产以后，通过 \(P_i\rightarrow M_{ij}^{(1)}\) 运输边到达的生产后库存。
+
+第二个库存：
+
+\[
+M_{ij}^{(2)}
+\]
+
+表示经过中间物流以后、位于下游生产端之前的可用库存。
+
+因此局部物理过程为：
+
+\[
+\boxed{
+P_i
+\xrightarrow{\text{output transport}}
+M_{ij}^{(1)}
+\xrightarrow{\text{pure transport}}
+M_{ij}^{(2)}
+\xrightarrow{\text{input transport}}
+P_j
+}
+\]
+
+三条边全部具有运输能力和运输 delay。
+
+现实物流中即使包含卡车、铁路、港口、海运、清关、配送中心或其他中间环节，也不继续增加新的 \(M\)。这些内部物流细节统一折叠进当前既有边的运输参数中。尤其是两个库存之间的：
+
+\[
+M_{ij}^{(1)}\rightarrow M_{ij}^{(2)}
+\]
+
+承担两端库存之间的完整中间物流过程。
+
+图上的边长可以用于辅助表达空间事实。生产节点与库存节点画得很近，可以表示二者位于同一厂区或相邻位置；两个 \(M\) 画得很近，可以表示两个库存设施在现实中距离较短；跨区域物流可以画得更长。图形边长提供空间直觉，真正进入动力学计算的运输时间由每条边自己的 \(\tau_e^{trans}\) 给出。
+
+一个生产流程可以同时需要多个输入。例如：
+
+\[
+M_A\rightarrow P,\qquad
+M_B\rightarrow P,\qquad
+M_C\rightarrow P
+\]
+
+也可以产生多个输出：
+
+\[
+P\rightarrow M_D,\qquad
+P\rightarrow M_E
+\]
+
+输入和输出的数量关系分别由边上的投入系数与产出系数确定。
+
+单源表示某个所需组件在当前网络中只有一个真实供应来源，不限制一个生产流程只能具有一种输入或一种输出。
+
+---
+
+## 3. 多源、分支与配给
+
+多源网络沿用同一套 \(P\)、\(M\) 和边语义，不增加新的节点类型。
+
+### 多个上游生产流程供给一个下游生产流程
+
+若 \(P_1\) 和 \(P_2\) 都向同一个下游 \(P_D\) 提供生产所需物料，可以写成两条独立来源路径：
+
+\[
+P_1
+\rightarrow
+M_{1D}^{(1)}
+\rightarrow
+M_{1D}^{(2)}
+\rightarrow
+P_D
+\]
+
+\[
+P_2
+\rightarrow
+M_{2D}^{(1)}
+\rightarrow
+M_{2D}^{(2)}
+\rightarrow
+P_D
+\]
+
+每条路径拥有独立库存编号、库存容量和运输参数。多个上游供给一个 \(P_D\) 时，不需要在上游 \(P\rightarrow M\) 边上增加“向 \(P_D\) 配给多少”的额外比例；下游生产对各类输入的需求由 \(M\rightarrow P\) 边上的投入系数直接定义。
 
 例如：
 
 \[
-M_A
+\boxed{
+2A+3B\rightarrow C
+}
+\]
+
+对应：
+
+\[
+a_{A,p}=2,\qquad
+a_{B,p}=3
+\]
+
+以及：
+
+\[
+b_{p,C}=1
+\]
+
+其含义是生产流程 \(P\) 每运行一个单位，需要消耗 \(2\) 单位 \(A\) 和 \(3\) 单位 \(B\)，并产生 \(1\) 单位 \(C\)。
+
+如果 \(A\) 与 \(B\) 分别来自不同的上游生产流程，来源路径仍然保持独立；最终进入 \(P\) 的数量关系继续由：
+
+\[
+2:3
+\]
+
+这一投入配方决定。
+
+### 一个生产流程供给多个下游生产流程
+
+若同一个生产流程 \(P_i\) 的同一种产出需要供给多个下游 \(P_1,\ldots,P_k\)，则每条对应的 \(P_i\rightarrow M\) 分支边除了产出系数和运输属性外，还保存配给比例：
+
+\[
+\boxed{
+\rho_{ie}
+}
+\]
+
+例如：
+
+\[
+P_i
+\rightarrow
+M_{i1}^{(1)}
+\rightarrow
+M_{i1}^{(2)}
 \rightarrow
 P_1
+\]
+
+\[
+P_i
 \rightarrow
-M_B
+M_{i2}^{(1)}
+\rightarrow
+M_{i2}^{(2)}
 \rightarrow
 P_2
-\rightarrow
-M_C
 \]
 
-一个生产过程可以有多个必要输入：
+若两条路径分配的是 \(P_i\) 的同一种输出物料，则：
 
 \[
-M_A\rightarrow P,
-\qquad
-M_B\rightarrow P,
-\qquad
-M_C\rightarrow P.
+\rho_{i1}\ge 0,\qquad
+\rho_{i2}\ge 0
 \]
 
-一个物料库存也可以同时供给多个下游过程：
+并通常满足：
 
 \[
-M_A\rightarrow P_1,
-\qquad
-M_A\rightarrow P_2.
+\boxed{
+\rho_{i1}+\rho_{i2}=1
+}
 \]
 
-因此网络允许 chain、fork、assembly 与 multi-source merge 等局部结构。
-
----
-
-# 3. 多源生产网络
-
-多源不新增基础节点类型。
-
-若不同来源仍会影响后续可行路径、工艺兼容性、运输条件或约束，则保持为不同分支；若来源差异从某一点开始不再改变后续运行，则可以在该点合并。
-
-来源历史可以保存在 lineage 属性中，例如：
+一般情况下，对同一输出物料的全部下游分支集合 \(\mathcal B(p,m)\)：
 
 \[
-supplier,\quad plant,\quad batch,\quad origin.
+\boxed{
+\sum_{e\in\mathcal B(p,m)}\rho_e=1
+}
 \]
 
-因此：
+若 \(P_i\) 每运行一个单位可产生 \(b_{pm}\) 单位物料 \(m\)，则分配到分支 \(e\) 的名义产出量为：
 
 \[
-\text{拓扑上的合并}
+\boxed{
+\rho_e\,b_{pm}
+}
+\]
+
+配给比例用于同一种产出在多个下游之间的分流。若 \(P\) 同时产生不同种类的联产品，则不同物料的数量首先由各自的产出系数 \(b_{pm}\) 定义；配给比例只在某一种具体产出继续向多个下游分支时使用。
+
+当前静态网络中 \(\rho_e\) 作为给定配给比例保存。若后续研究调度或主动控制，可以进一步扩展成随时间变化的 \(\rho_e(t)\)。
+
+### 库存实例不自动合并
+
+每个 \(M\) 都是一个独立库存实例，并具有唯一编号：
+
+\[
+\boxed{
+id_m
+}
+\]
+
+即使两个库存具有完全相同的：
+
+\[
+(material,\ state,\ location)
+\]
+
+它们仍然可以保持为：
+
+\[
+M^{(1)},\qquad M^{(2)}
+\]
+
+并分别拥有：
+
+\[
+q_{m_1}(t),\qquad q_{m_2}(t)
+\]
+
+以及各自的库存容量、上下游连接和冲击历史。
+
+因此，\(material\)、\(state\) 和 \(location\) 用于描述库存的物理属性，\(id_m\) 用于确定库存实例身份。只有现实中本来就是同一个物理库存实例时，网络才使用同一个 \(M\) 节点。
+
+同一个产品可以对应多张生产 DAG。若两套生产实现长期独立、耦合很少，可以分别建网：
+
+\[
+\boxed{
+\text{Product identity}
 \neq
-\text{删除来源历史}.
+\text{Production-network identity}
+}
 \]
-
-对于 Q2 的传播实验，是否允许替代必须事先固定。第一阶段建议默认：
-
-\[
-\boxed{\text{无主动替代、无临时新增供应商}}
-\]
-
-避免把网络拓扑效应与企业决策混在一起。
 
 ---
 
-# 4. 静态物理参数
+## 4. 静态物理属性
 
-## 4.1 Material 节点
+静态层保存生产网络能够正确运行所需要的基本物理信息。
 
-每个物料节点定义为：
-
-\[
-m=(material,\ state,\ location)
-\]
-
-并保存库存容量：
+当前静态网络写为：
 
 \[
-\boxed{\bar q_m}
+\boxed{
+G^S=
+\left(
+M,\,
+P,\,
+E^{MP},\,
+E^{PM},\,
+E^{MM};
+\Theta
+\right)
+}
 \]
 
 其中：
 
 \[
-\bar q_m=\text{该物料节点的最大库存容量}.
+E^{MP}\subseteq M\times P
 \]
 
----
+表示库存到生产流程的投入运输边；
 
-## 4.2 Production 节点
+\[
+E^{PM}\subseteq P\times M
+\]
 
-每个生产过程 \(p\) 保存：
+表示生产流程到库存的产出运输边；
+
+\[
+E^{MM}\subseteq M\times M
+\]
+
+表示库存之间的纯运输边。
+
+所有边组成：
+
+\[
+E=E^{MP}\cup E^{PM}\cup E^{MM}
+\]
+
+并统一具有运输能力和运输 delay。
+
+### Material 节点 \(M\)
+
+Material 节点至少保存：
 
 \[
 \boxed{
-P_p=
+M_m:
 \left(
+id_m,\,
+material_m,\,
+state_m,\,
+location_m,\,
+\bar q_m
+\right)
+}
+\]
+
+其中：
+
+\[
+id_m=\text{库存实例唯一编号}
+\]
+
+\[
+material_m=\text{物料种类}
+\]
+
+\[
+state_m=\text{物料状态}
+\]
+
+\[
+location_m=\text{物料所在位置}
+\]
+
+\[
+\bar q_m=\text{该库存实例的最大允许存量}
+\]
+
+实际库存量：
+
+\[
+\boxed{
+q_m(t)
+}
+\]
+
+属于动态状态，并满足：
+
+\[
+\boxed{
+0\le q_m(t)\le \bar q_m
+}
+\]
+
+初始库存为：
+
+\[
+\boxed{
+q_m(0)
+}
+\]
+
+必要时，\(M\) 还可以保存库存所属企业、仓储类型、设施编号等附加静态信息；这些字段不会改变库存节点的基本物理意义。
+
+### Production 节点 \(P\)
+
+\(P\) 表示生产工艺。生产流程至少保存：
+
+\[
+\boxed{
+P_p:
+\left(
+id_p,\,
+process_p,\,
+location_p,\,
 \bar c_p,\,
-\tau_p^{prod},\,
-u_p^0
+\tau_p^{prod}
 \right)
 }
 \]
@@ -156,1044 +475,859 @@ u_p^0
 其中：
 
 \[
-\bar c_p=\text{名义最大生产能力},
+id_p=\text{生产流程实例编号}
 \]
 
 \[
-\tau_p^{prod}=\text{生产 lead time},
+process_p=\text{生产工艺或生产活动}
 \]
 
 \[
-u_p^0=\text{无冲击基准状态下的目标生产流率}.
-\]
-
-这里 \(u_p^0\) 不是企业优化决策，只是 Q2 基线实验的外生 reference flow。
-
-为表示冲击后的运行能力，再定义：
-
-\[
-\boxed{
-c_p(t)\leq \bar c_p
-}
-\]
-
-其中 \(c_p(t)\) 是时刻 \(t\) 的有效生产能力。
-
-正常状态：
-
-\[
-c_p(t)=\bar c_p.
-\]
-
-例如工厂停工：
-
-\[
-c_p(t)=0,
-\qquad
-t_0\leq t<t_0+L.
-\]
-
----
-
-## 4.3 输入边 \(M\rightarrow P\)
-
-输入边保存投入系数：
-
-\[
-\boxed{a_{mp}}
-\]
-
-表示生产过程 \(p\) 每运行一个单位，需要消耗多少单位物料 \(m\)。
-
-若：
-
-\[
-2A+3B\rightarrow C,
-\]
-
-则：
-
-\[
-a_{A,p}=2,
-\qquad
-a_{B,p}=3.
-\]
-
----
-
-## 4.4 输出边 \(P\rightarrow M\)
-
-输出边保存产出系数：
-
-\[
-\boxed{b_{pm}}
-\]
-
-表示生产过程 \(p\) 每运行一个单位，产生多少单位输出物料 \(m\)。
-
-若：
-
-\[
-2A+3B\rightarrow C,
-\]
-
-则：
-
-\[
-b_{p,C}=1.
-\]
-
-如果输出需要运输到下游库存，则该连接还保存：
-
-\[
-\boxed{
-\bar c_e^{trans},
-\qquad
-\tau_e^{trans}
-}
-\]
-
-其中：
-
-\[
-\bar c_e^{trans}=\text{名义运输能力},
+location_p=\text{生产位置}
 \]
 
 \[
-\tau_e^{trans}=\text{运输 lead time}.
+\bar c_p=\text{单位时间最大生产能力 / 额定产出率}
 \]
-
-与生产能力类似，定义运行时有效运输能力：
 
 \[
-\boxed{
-c_e^{trans}(t)\leq \bar c_e^{trans}.
-}
+\tau_p^{prod}=\text{生产 delay}
 \]
 
-正常状态：
-
-\[
-c_e^{trans}(t)=\bar c_e^{trans}.
-\]
-
-运输冲击可以通过降低 \(c_e^{trans}(t)\) 表示。
-
----
-
-# 5. Delay
-
-生产 delay 与运输 delay 分开：
-
-\[
-\boxed{
-\tau_p^{prod},
-\qquad
-\tau_e^{trans}
-}
-\]
-
-Capacity 描述单位时间最多能处理多少流量；Delay 描述已经进入某阶段的物料需要多久才能进入下一阶段。
-
-一批物料的基本传播过程为：
-
-\[
-\text{available input}
-\rightarrow
-\text{production WIP}
-\rightarrow
-\text{finished-goods waiting queue}
-\rightarrow
-\text{in-transit}
-\rightarrow
-\text{downstream available inventory}.
-\]
-
-因此，物料离开上游库存以后，不会瞬间进入下游可用库存。
-
----
-
-# 6. 动态状态
-
-统一时间步长为：
-
-\[
-\boxed{\Delta t}
-\]
-
-时刻 \(t\) 的系统状态正式定义为：
-
-\[
-\boxed{
-S(t)=
-\left(
-Q(t),\,
-W(t),\,
-H(t),\,
-L(t)
-\right)
-}
-\]
-
-其中：
-
-\[
-Q(t)=\{q_m(t)\}
-\]
-
-为各物料节点的可用库存；
-
-\[
-W(t)=\{w_p(t,\ell)\}
-\]
-
-为生产中的 WIP pipeline；
-
-\[
-H(t)=\{h_e(t)\}
-\]
-
-为生产已经完成、但尚未进入运输的 finished-goods waiting queue；
-
-\[
-L(t)=\{\ell_e(t,r)\}
-\]
-
-为运输中的 in-transit pipeline。
-
-其中 \(\ell\) 与 \(r\) 可以表示剩余生产时间或剩余运输时间。
-
-只要存在非零生产或运输 delay，WIP 与 in-transit 就属于正式状态，而不是可选记录项。
-
-初始状态必须给定：
-
-\[
-\boxed{
-S_0=
-\left(
-Q(0),W(0),H(0),L(0)
-\right).
-}
-\]
-
-若实验从完全稳态开始，则可以通过 warm-up 生成一致的 \(W(0)\)、\(H(0)\) 与 \(L(0)\)。
-
----
-
-# 7. 生产执行规则
-
-这一节用于使系统动力学闭合。
-
-## 7.1 候选生产流率
-
-首先定义过程 \(p\) 在不考虑即时库存竞争时希望执行的候选流率：
-
-\[
-\boxed{
-\tilde u_p(t)
-=
-\min
-\left(
-u_p^0,\,
-c_p(t)
-\right).
-}
-\]
-
-因此：
-
-\[
-0\leq \tilde u_p(t)\leq \bar c_p.
-\]
-
----
-
-## 7.2 输入需求
-
-过程 \(p\) 在一个时间步内对物料 \(m\) 的候选需求为：
-
-\[
-\boxed{
-R_{mp}(t)
-=
-a_{mp}\tilde u_p(t)\Delta t.
-}
-\]
-
-物料 \(m\) 面对的总候选需求为：
-
-\[
-\boxed{
-R_m(t)
-=
-\sum_{p:m\rightarrow p}
-R_{mp}(t).
-}
-\]
-
----
-
-# 8. 库存不足时的分配规则
-
-为了避免同一个库存同时被多个下游过程重复使用，第一阶段采用确定性的 proportional rationing。
-
-对每个物料 \(m\)，定义库存满足比例：
-
-\[
-\boxed{
-\rho_m(t)
-=
-\begin{cases}
-1, & R_m(t)=0,\\[1mm]
-\min\left(1,\dfrac{q_m(t)}{R_m(t)}\right), & R_m(t)>0.
-\end{cases}
-}
-\]
-
-对于需要多个输入的生产过程，所有必要输入中最紧的那个决定实际执行比例：
-
-\[
-\boxed{
-\rho_p(t)
-=
-\min_{m:m\rightarrow p}
-\rho_m(t).
-}
-\]
-
-于是实际生产流率为：
+生产运行时的实际流率记为：
 
 \[
 \boxed{
 u_p(t)
-=
-\tilde u_p(t)\rho_p(t).
 }
 \]
 
 并满足：
 
 \[
-0\leq u_p(t)\leq c_p(t)\leq\bar c_p.
-\]
-
-实际从物料 \(m\) 消耗：
-
-\[
 \boxed{
-C_{mp}(t)
-=
-a_{mp}u_p(t)\Delta t.
+0\le u_p(t)\le \bar c_p
 }
 \]
 
-该规则的目的不是模拟企业最优行为，而是固定一个透明、确定、可重复的 baseline allocation rule，使传播差异主要来自网络结构和物理参数。
+生产能力决定单位时间最多能够完成多少生产活动；生产 delay 决定一批投入进入生产以后，需要经过多久才能形成产出。
 
-后续可以把 proportional rationing 替换为 priority、FIFO、合同优先级或优化策略，并比较传播规律是否发生改变。
+同一家公司内部多个 \(P\) 可能共享企业级总产量限制、设备限制或其他联合约束。当前核心 DAG 不额外表述这类公司级聚合产量约束，各个 \(P\) 只保存自身局部生产参数。
 
----
+### 输入边 \(M\rightarrow P\)
 
-# 9. WIP、运输等待队列与在途状态
-
-## 9.1 Production WIP
-
-当输入在时刻 \(t\) 被生产过程消耗后，它立即退出可用库存。
-
-由时刻 \(t\) 启动的生产量：
+任意输入边：
 
 \[
-u_p(t)\Delta t
+e=(m,p)\in E^{MP}
 \]
 
-经过：
-
-\[
-\tau_p^{prod}
-\]
-
-后完成生产。
-
-因此：
+都保存：
 
 \[
 \boxed{
-\text{production start at }t
-\Rightarrow
-\text{production completion at }t+\tau_p^{prod}.
-}
-\]
-
-完成数量按输出系数 \(b_{pm}\) 进入对应输出边的 finished-goods waiting queue。
-
----
-
-## 9.2 Finished-goods waiting queue
-
-对每条需要运输的输出边 \(e=(p,m)\)，定义：
-
-\[
-\boxed{
-h_e(t)
-}
-\]
-
-表示已经生产完成、但由于运输能力限制尚未进入运输的货物。
-
-这是必要状态，因为可能出现：
-
-\[
-\text{production completion rate}
->
-\text{transport capacity}.
-\]
-
-每个时间步能够进入运输的数量为：
-
-\[
-\boxed{
-x_e^{ship}(t)
-=
-\min
-\left[
-h_e(t)+x_e^{new}(t),\,
-c_e^{trans}(t)\Delta t
-\right],
-}
-\]
-
-其中 \(x_e^{new}(t)\) 是该时间步刚刚完成生产并进入该边的数量。
-
-等待队列更新为：
-
-\[
-\boxed{
-h_e(t+\Delta t)
-=
-h_e(t)+x_e^{new}(t)-x_e^{ship}(t).
-}
-\]
-
----
-
-## 9.3 In-transit pipeline
-
-进入运输的物料在：
-
-\[
+e^{MP}:
+\left(
+a_{mp},\,
+\bar c_e^{trans},\,
 \tau_e^{trans}
-\]
-
-结束前属于 in-transit 状态。
-
-因此：
-
-\[
-\boxed{
-x_e^{ship}(t)
-\Rightarrow
-x_e^{arrive}(t+\tau_e^{trans}).
-}
-\]
-
-在运输完成前，该数量不计入下游可用库存。
-
----
-
-# 10. 库存更新
-
-对物料节点 \(m\)，在一个时间步内：
-
-\[
-\boxed{
-q_m(t+\Delta t)
-=
-q_m(t)
-+
-A_m(t)
--
-C_m(t)
--
-S_m(t),
+\right)
 }
 \]
 
 其中：
 
 \[
-A_m(t)=\text{该时间步从运输管道到达的数量},
+a_{mp}=\text{投入系数}
+\]
+
+表示每运行一个单位生产流程 \(P_p\)，需要多少单位来自库存 \(M_m\) 的输入物料。
+
+同时：
+
+\[
+\bar c_e^{trans}=\text{该边单位时间最大运输能力}
 \]
 
 \[
-C_m(t)
-=
-\sum_{p:m\rightarrow p}
-a_{mp}u_p(t)\Delta t
+\tau_e^{trans}=\text{该边运输 delay}
 \]
 
-为生产消耗，
+因此 \(M\rightarrow P\) 同时表达“送入生产”和“送多少才能完成一个单位生产”。
+
+对于：
 
 \[
-S_m(t)=\text{终端需求实际提取量}.
+2A+3B\rightarrow C
 \]
 
-库存约束：
+有：
 
 \[
 \boxed{
-0\leq q_m(t)\leq \bar q_m.
+a_{A,p}=2,\qquad a_{B,p}=3
 }
 \]
 
-Q2 第一阶段建议令 \(\bar q_m\) 足够大，使 storage capacity 不成为主要瓶颈；若后续研究库存容量冲击，再显式处理满仓、拒收或上游阻塞。
+### 输出边 \(P\rightarrow M\)
 
----
+任意输出边：
 
-# 11. 终端需求
+\[
+e=(p,m)\in E^{PM}
+\]
 
-为了使网络存在稳定的物料消耗端，并定义最终产出损失，对 terminal material \(m\) 设置外生需求：
+至少保存：
 
 \[
 \boxed{
-d_m(t).
-}
-\]
-
-第一阶段可以使用常数需求：
-
-\[
-d_m(t)=d_m^0.
-\]
-
-实际满足的需求为：
-
-\[
-\boxed{
-s_m(t)
-=
-\min
+e^{PM}:
 \left(
-d_m(t),\,
-\frac{q_m(t)}{\Delta t}
-\right).
+b_{pm},\,
+\bar c_e^{trans},\,
+\tau_e^{trans}
+\right)
 }
 \]
 
-对应一个时间步的实际提取量：
+其中：
 
 \[
-S_m(t)=s_m(t)\Delta t.
+b_{pm}=\text{产出系数}
 \]
 
-未满足需求：
+表示每运行一个单位生产流程 \(P_p\)，会产生多少单位送往库存 \(M_m\) 的输出物料。
+
+对于：
+
+\[
+2A+3B\rightarrow C
+\]
+
+有：
 
 \[
 \boxed{
-z_m(t)=d_m(t)-s_m(t).
+b_{p,C}=1
 }
 \]
 
-因此可以定义：
-
-\[
-\text{service loss},
-\qquad
-\text{final-output loss},
-\qquad
-\text{recovery time}.
-\]
-
-终端需求只负责提供固定 sink；第一阶段不让需求根据价格或短缺内生变化。
-
----
-
-# 12. 单步动力学顺序
-
-为了保证仿真结果可重复，每个时间步按固定顺序执行。
-
-建议顺序：
-
-1. 将本时刻到期的运输批次加入下游可用库存；
-2. 将本时刻到期的生产批次加入对应 finished-goods waiting queue；
-3. 执行 terminal demand withdrawal；
-4. 计算所有过程的候选生产流率 \(\tilde u_p(t)\)；
-5. 计算各物料的总输入需求 \(R_m(t)\)；
-6. 计算 proportional rationing 系数 \(\rho_m(t)\)；
-7. 得到所有过程的实际流率 \(u_p(t)\)；
-8. 从可用库存扣除生产投入，并把对应批次加入 WIP pipeline；
-9. 根据运输能力从 waiting queue 发货，并加入 in-transit pipeline；
-10. 推进时间到 \(t+\Delta t\)。
-
-写成状态方程：
+若同一种生产输出从 \(P_p\) 分配给多个下游分支，则相应的 \(P\rightarrow M\) 分支边增加配给比例：
 
 \[
 \boxed{
-S(t+\Delta t)
-=
-F_G
+e^{PM}_{branch}:
 \left(
-S(t),
-c^P(t),
-c^T(t),
-d(t)
-\right).
+b_{pm},\,
+\rho_e,\,
+\bar c_e^{trans},\,
+\tau_e^{trans}
+\right)
 }
 \]
 
-在网络 \(G\)、初始状态 \(S_0\)、能力路径与需求路径给定以后，系统轨迹唯一确定。
+其中 \(\rho_e\) 描述该输出分配到当前分支的比例。
+
+因此，一个 \(P\rightarrow M\) 分支同时携带三类物理信息：
+
+\[
+\boxed{
+\text{Production output relation}
++
+\text{Allocation}
++
+\text{Transportation}
+}
+\]
+
+没有发生一对多分配时，\(\rho_e\) 可以省略。
+
+### 库存边 \(M\rightarrow M\)
+
+任意库存间运输边：
+
+\[
+e=(m_i,m_j)\in E^{MM}
+\]
+
+保存：
+
+\[
+\boxed{
+e^{MM}:
+\left(
+\bar c_e^{trans},\,
+\tau_e^{trans}
+\right)
+}
+\]
+
+它表示两个独立库存实例之间的纯物流移动，不承担生产投入或产出系数。
+
+若模型需要显式记录物理距离，也可以在所有边上增加：
+
+\[
+d_e
+\]
+
+得到：
+
+\[
+\boxed{
+e:
+\left(
+\bar c_e^{trans},\,
+\tau_e^{trans},\,
+d_e
+\right)
+}
+\]
+
+\(d_e\) 用于表达实际空间尺度和辅助图形布局；动力学中的传播时间仍由 \(\tau_e^{trans}\) 直接给出。
+
+当前最小静态物理信息可以概括为：
+
+\[
+\boxed{
+\begin{array}{lll}
+M
+&:&
+(id_m,\ material,\ state,\ location,\ \bar q_m)
+\\[2mm]
+P
+&:&
+(id_p,\ process,\ location,\ \bar c_p,\ \tau_p^{prod})
+\\[2mm]
+M\rightarrow P
+&:&
+(a_{mp},\ \bar c_e^{trans},\ \tau_e^{trans})
+\\[2mm]
+P\rightarrow M
+&:&
+(b_{pm},\ [\rho_e],\ \bar c_e^{trans},\ \tau_e^{trans})
+\\[2mm]
+M\rightarrow M
+&:&
+(\bar c_e^{trans},\ \tau_e^{trans})
+\end{array}
+}
+\]
+
+其中 \([\rho_e]\) 只在同一种输出从一个 \(P\) 向多个下游分支配给时使用。
 
 ---
 
-# 13. 基线稳态
+## 5. Capacity、Delay 与运输状态
 
-为了研究 shock propagation，建议先构造无冲击基线。
+Capacity 和 delay 描述不同的物理限制。
 
-正常状态下：
-
-\[
-c_p(t)=\bar c_p,
-\qquad
-c_e^{trans}(t)=\bar c_e^{trans},
-\qquad
-d_m(t)=d_m^0.
-\]
-
-令系统运行 warm-up，直到主要状态进入稳定或周期稳定区间。
-
-记基准轨迹为：
+生产能力：
 
 \[
 \boxed{
-S^{base}(t).
+\bar c_p
 }
 \]
 
-冲击轨迹记为：
+决定单位时间最多能够运行多少生产活动。
+
+生产 delay：
 
 \[
 \boxed{
-S^{shock}(t).
+\tau_p^{prod}
 }
 \]
 
-所有传播指标都相对于基准轨迹定义，而不是直接看冲击后的绝对水平。
+决定投入进入 \(P\) 后，需要经过多久才能形成生产输出。
+
+每一条边都有运输能力：
+
+\[
+\boxed{
+\bar c_e^{trans}
+}
+\]
+
+决定单位时间最多能够沿该边移动多少物料。
+
+每一条边也都有运输 delay：
+
+\[
+\boxed{
+\tau_e^{trans}
+}
+\]
+
+决定物料进入该边以后，需要多久才能到达边的另一端。
+
+因此：
+
+\[
+\boxed{
+\text{Capacity}
+=
+\text{单位时间最多能够处理或运输多少}
+}
+\]
+
+\[
+\boxed{
+\text{Delay}
+=
+\text{已经进入某个过程的物料多久以后才能到达下一状态}
+}
+\]
+
+对一段：
+
+\[
+M_A\rightarrow P\rightarrow M_B
+\]
+
+如果：
+
+\[
+\tau_{A,P}^{trans}=1h,\qquad
+\tau_p^{prod}=3h,\qquad
+\tau_{P,B}^{trans}=2h
+\]
+
+则一批物料从 \(M_A\) 发出，到最终进入 \(M_B\) 的最短物理时间为：
+
+\[
+\boxed{
+1h+3h+2h=6h
+}
+\]
+
+运输完成以前，物料属于相应边上的在途状态，不计入目标库存。
+
+因此运行中的物料可以分布在：
+
+\[
+\boxed{
+\text{库存中}
++
+\text{运输中}
++
+\text{生产中}
+}
+\]
+
+三个基本物理状态中。
 
 ---
 
-# 14. 冲击表示
+## 6. 动力学系统
 
-## 14.1 生产能力冲击
-
-例如过程 \(i\) 在区间 \([t_0,t_0+L)\) 停工：
+静态网络确定以后，引入统一时间轴：
 
 \[
 \boxed{
-c_i(t)=0,
-\qquad
-t_0\leq t<t_0+L.
+t:0\rightarrow T
 }
 \]
 
-部分减产：
+并给定初始状态：
 
 \[
-c_i(t)=\gamma\bar c_i,
-\qquad
-0<\gamma<1.
+\boxed{
+S_0
+}
 \]
+
+最基本的初始状态包括：
+
+\[
+q_m(0)
+\]
+
+必要时还可以包含初始 WIP 和初始在途物料。
+
+随着时间推进，系统产生动态状态：
+
+\[
+\boxed{
+S(t)
+}
+\]
+
+### 库存
+
+每个库存实例具有独立库存轨迹：
+
+\[
+\boxed{
+q_m(t)
+}
+\]
+
+满足：
+
+\[
+\boxed{
+0\le q_m(t)\le\bar q_m
+}
+\]
+
+库存只在运输真正到达 \(M\) 后增加；物料从 \(M\) 发出进入任意出边时，相应数量退出当前可用库存。
+
+若 \(In(m)\) 和 \(Out(m)\) 分别表示库存节点 \(m\) 的入边和出边，在固定运输 delay、无损运输的连续流近似下：
+
+\[
+\boxed{
+\dot q_m(t)
+=
+\sum_{e\in In(m)}
+f_e\!\left(t-\tau_e^{trans}\right)
+-
+\sum_{e\in Out(m)}
+f_e(t)
+}
+\]
+
+其中 \(f_e(t)\) 是时刻 \(t\) 进入边 \(e\) 的实际运输流率。
+
+### 运输流与在途物料
+
+任意边的实际运输流率为：
+
+\[
+\boxed{
+f_e(t)
+}
+\]
+
+满足：
+
+\[
+\boxed{
+0\le f_e(t)\le\bar c_e^{trans}
+}
+\]
+
+物料在时刻 \(t\) 进入边 \(e\)，在：
+
+\[
+t+\tau_e^{trans}
+\]
+
+到达下游节点。
+
+若运输无损，固定 delay 边上的在途量可写为：
+
+\[
+\boxed{
+z_e(t)
+=
+\int_{t-\tau_e^{trans}}^{t}f_e(s)\,ds
+}
+\]
+
+因此 \(P\rightarrow M\)、\(M\rightarrow M\) 和 \(M\rightarrow P\) 都可以存在各自独立的在途状态。
+
+### 生产流率与生产中物料
+
+生产流程实际运行强度为：
+
+\[
+\boxed{
+u_p(t)
+}
+\]
+
+并满足：
+
+\[
+\boxed{
+0\le u_p(t)\le\bar c_p
+}
+\]
+
+对输入边 \(M_m\rightarrow P_p\)，每运行一个单位 \(P_p\) 需要：
+
+\[
+a_{mp}
+\]
+
+单位输入。多输入生产必须同时满足相应投入配方。
+
+例如：
+
+\[
+2A+3B\rightarrow C
+\]
+
+若某一时段计划运行：
+
+\[
+u_p(t)=10
+\]
+
+则需要已经完成输入运输并可供该生产流程使用的：
+
+\[
+20
+\]
+
+单位 \(A\) 和：
+
+\[
+30
+\]
+
+单位 \(B\)。
+
+物料真正进入生产以后，在：
+
+\[
+\tau_p^{prod}
+\]
+
+结束以前属于 WIP / 生产中状态：
+
+\[
+\boxed{
+\text{production input at }t
+\Rightarrow
+\text{production output at }t+\tau_p^{prod}
+}
+\]
+
+生产完成后的数量由输出系数给出。
+
+如果：
+
+\[
+b_{p,C}=1
+\]
+
+则运行 \(10\) 个生产单位产生：
+
+\[
+10C
+\]
+
+随后这些产出进入相应的 \(P\rightarrow M\) 运输边。
+
+### 一对多配给的动态含义
+
+若同一种产出通过多条 \(P\rightarrow M\) 分支供给多个下游，静态配给比例决定各分支获得的名义份额。
+
+设生产流程 \(P_p\) 对物料 \(C\) 的产出系数为：
+
+\[
+b_{p,C}
+\]
+
+两个分支的配给比例为：
+
+\[
+\rho_1,\qquad\rho_2
+\]
+
+且：
+
+\[
+\rho_1+\rho_2=1
+\]
+
+则生产完成后对应两个分支的名义释放量为：
+
+\[
+\boxed{
+\rho_1 b_{p,C}u_p(t-\tau_p^{prod})
+}
+\]
+
+和：
+
+\[
+\boxed{
+\rho_2 b_{p,C}u_p(t-\tau_p^{prod})
+}
+\]
+
+每个分支随后继续受到自身 \(P\rightarrow M\) 边运输能力与运输 delay 的约束。
+
+如果某条分支的运输能力、目标库存容量或其他物理条件不足以承载给定配给，实际可行生产流率会受到相应约束。后续若引入主动调度，可以通过调整 \(\rho_e(t)\) 改变分配。
 
 ---
 
-## 14.2 运输能力冲击
+## 7. 动态历史与冲击传播
 
-例如运输边 \(e\) 发生中断：
+静态网络和动力学规则运行后，会产生 trajectory / event history，包括：
+
+- 各库存实例随时间变化的 \(q_m(t)\)；
+- 各生产过程实际流率 \(u_p(t)\)；
+- 各条边实际运输流率 \(f_e(t)\)；
+- 各批物料的生产开始与完成时间；
+- 各条边上的在途物料数量；
+- 一对多分支的实际配给结果；
+- 冲击后的产能变化；
+- 冲击传播路径；
+- 恢复过程。
+
+整体关系为：
 
 \[
 \boxed{
-c_e^{trans}(t)=0
+\text{Static Network}
++
+\text{Dynamics}
+\longrightarrow
+\text{Trajectory / Dynamic History}
 }
+\]
+
+动态历史属于运行结果，不属于静态拓扑。
+
+冲击可以通过生产能力或任意边的运输能力变化进入系统。例如：
+
+\[
+\bar c_p:100\rightarrow20
 \]
 
 或：
 
 \[
-c_e^{trans}(t)
-=
-\gamma_e\bar c_e^{trans}.
+\bar c_e^{trans}:1000\rightarrow300
 \]
 
----
+也可以通过运输 delay 增大进入系统：
 
-## 14.3 需求冲击
+\[
+\tau_e^{trans}:8h\rightarrow20h
+\]
 
-若需要研究需求侧冲击，可以外生修改：
+网络拓扑可以保持不变，运行时的有效物理参数发生变化。
+
+对于标准结构：
+
+\[
+P_i
+\rightarrow
+M_{ij}^{(1)}
+\rightarrow
+M_{ij}^{(2)}
+\rightarrow
+P_j
+\]
+
+若中间运输能力下降，则可能出现：
+
+\[
+q_{M_{ij}^{(1)}}(t)\uparrow
+\]
+
+以及：
+
+\[
+q_{M_{ij}^{(2)}}(t)\downarrow
+\]
+
+第一个库存逐渐积压并可能达到：
+
+\[
+q_{M_{ij}^{(1)}}(t)=\bar q_{M_{ij}^{(1)}}
+\]
+
+从而反向约束上游生产；第二个库存逐渐耗尽并可能达到：
+
+\[
+q_{M_{ij}^{(2)}}(t)=0
+\]
+
+从而限制下游生产。
+
+一个上游 \(P\) 同时供给多个下游时，配给比例还会改变冲击在不同分支上的分布。即使总产出冲击相同，不同的：
+
+\[
+\rho_e
+\]
+
+也会产生不同的下游库存耗尽时间和生产下降幅度。
+
+冲击传播主要受到：
 
 \[
 \boxed{
-d_m(t).
-}
-\]
-
-第一阶段 Q2 建议先固定 demand，仅研究生产或运输 shock。
-
----
-
-# 15. 传播指标
-
-Q2 主要关注三个对象：
-
-\[
-\boxed{
-\text{Arrival Time}
+\text{Capacity}
 +
-\text{Amplitude}
+\text{Inventory}
 +
-\text{System Loss}
-}
-\]
-
-## 15.1 节点生产缺口
-
-定义过程 \(p\) 的相对生产缺口：
-
-\[
-\boxed{
-\delta_p(t)
-=
-1-
-\frac{u_p^{shock}(t)}
-     {u_p^{base}(t)}
-}
-\]
-
-当基准流率为零时，该时刻不计算相对缺口。
-
----
-
-## 15.2 冲击首次到达时间
-
-给定阈值 \(\varepsilon>0\)，定义 shock 从源 \(i\) 到过程 \(j\) 的首次到达时间：
-
-\[
-\boxed{
-T_{ij}^{arr}
-=
-\inf
-\left\{
-t-t_0:
-\delta_j(t)\geq\varepsilon
-\right\}.
-}
-\]
-
----
-
-## 15.3 冲击幅度
-
-可以定义峰值幅度：
-
-\[
-\boxed{
-A_{ij}^{peak}
-=
-\max_{t\geq t_0}
-\delta_j(t)
-}
-\]
-
-或累计损失：
-
-\[
-\boxed{
-A_{ij}^{cum}
-=
-\int_{t_0}^{T}
-\left(
-u_j^{base}(t)-u_j^{shock}(t)
-\right)dt.
-}
-\]
-
-离散时间下使用求和。
-
----
-
-## 15.4 终端损失
-
-终端需求未满足的累计量：
-
-\[
-\boxed{
-L_m
-=
-\int_{t_0}^{T}
-z_m(t)\,dt.
-}
-\]
-
-全系统损失：
-
-\[
-\boxed{
-L^{sys}
-=
-\sum_{m\in M_{terminal}}
-L_m.
-}
-\]
-
----
-
-# 16. 面向传播规律的标准化变量
-
-为了比较不同规模、不同参数网络，优先使用无量纲或具有直接物理意义的变量。
-
-## 16.1 库存覆盖时间
-
-对物料 \(m\)，基准消耗率记为：
-
-\[
-\lambda_m^0.
-\]
-
-定义：
-
-\[
-\boxed{
-B_m
-=
-\frac{q_m^0}{\lambda_m^0}
-}
-\]
-
-其含义是：
-
-\[
-\text{当前库存能够支撑正常生产多久}.
-\]
-
-相比绝对库存量 \(q_m\)，\(B_m\) 更适合比较不同规模网络。
-
----
-
-## 16.2 产能冗余
-
-定义：
-
-\[
-\boxed{
-\sigma_p
-=
-\frac{\bar c_p-u_p^0}{u_p^0}.
-}
-\]
-
-\(\sigma_p\) 表示正常生产之外还剩多少相对 capacity slack。
-
----
-
-## 16.3 路径物理时间
-
-对路径 \(\pi\)，可以定义初步的有效传播长度：
-
-\[
-\boxed{
-L_{\pi}^{eff}
-=
-\sum_{r\in\pi}
-\left(
-\tau_r+B_r
-\right)
-}
-\]
-
-其中 \(\tau_r\) 表示该段生产/运输 lead time，\(B_r\) 表示相关下游库存的 depletion buffer。
-
-该量是 Q2 要通过 motif 分析和随机网络实验检验的候选传播变量，而不是预先假定成立的最终定律。
-
----
-
-# 17. Q2 的最小研究单元
-
-第一阶段优先研究四类 motif：
-
-## 17.1 Chain
-
-\[
-P_1\rightarrow M_1\rightarrow P_2
-\]
-
-用于研究：
-
-\[
-\text{delay}
+\text{Delay}
 +
-\text{inventory buffer}
-\rightarrow
-\text{arrival time}.
+\text{Allocation}
+}
 \]
 
----
+共同影响。
 
-## 17.2 Fork
+其中：
+
+- Capacity 决定局部生产或运输的最大吞吐；
+- Inventory 决定网络可以吸收短期缺口或积压多长时间；
+- Delay 决定物理影响沿生产和运输过程传播所需要的时间；
+- Allocation 决定一个上游产出在多个下游分支之间如何分布。
+
+典型传播过程可以写为：
 
 \[
-M
+\boxed{
+\text{local shock}
 \rightarrow
-\begin{cases}
-P_1\\
-P_2
-\end{cases}
+\text{transport / production flow change}
+\rightarrow
+\text{inventory accumulation or depletion}
+\rightarrow
+\text{production reduction}
+\rightarrow
+\text{delayed downstream propagation}
+}
 \]
-
-用于研究共享库存下的 rationing 与并行传播。
 
 ---
 
-## 17.3 Assembly
+## 8. 当前不纳入核心模型的内容
 
-\[
-M_A,M_B,M_C
-\rightarrow
-P
-\]
+以下内容暂不进入核心静态语法：
 
-用于研究多个必要投入中的 bottleneck 传播。
-
----
-
-## 17.4 Multi-source Merge
-
-\[
-M_A^{(1)},M_A^{(2)}
-\rightarrow
-P
-\]
-
-用于研究供应份额、多源冗余与 shock amplitude 的关系。
-
----
-
-# 18. 当前核心模型明确不包含的内容
-
-以下内容暂不进入 Q2 baseline：
-
-- 价格；
-- 成本；
+- 供应商合作等级；
 - 信用；
+- 采购偏好；
 - 谈判能力；
-- 主动换供应商；
-- 动态采购优化；
-- 安全库存优化；
-- 补货策略优化；
-- 企业博弈；
-- 战略性囤货；
-- endogenous demand response；
-- 恢复资源优化；
-- 网络重构。
+- 风险评分；
+- 安全库存策略；
+- 补货点；
+- 目标库存；
+- 工作班次与排班；
+- 成本和价格；
+- 用于生成或控制网络结构的参数；
+- 生产与采购决策策略；
+- 恢复与优化策略；
+- 同一企业内部多个 \(P\) 之间的公司级总产量限制；
+- 共享设备、共享劳动力等企业级联合资源约束。
 
-这些可以在得到基础传播规律以后逐层加入。
+这些内容可以在后续分别进入经济层、策略层、控制层或网络生成层，不改变当前核心 DAG 的基本物理语法。
 
 ---
 
-# 19. 架构总结
+## 9. 架构概括
 
-Q2 baseline 的最小完整模型为：
+该模型是一张以可用物料库存 \(M\) 和生产流程 \(P\) 为核心、以全部有向边承担物流行为的生产 DAG。
+
+连续生产流程之间采用固定结构：
 
 \[
 \boxed{
-G=(M,P,E)
+P-M-M-P
 }
 \]
 
-加静态参数：
+其中两个 \(M\) 是两个独立库存实例，中间不继续增加库存节点。
+
+所有边都保存：
 
 \[
 \boxed{
-\Theta=
-\left(
-a,\,
-b,\,
-\bar q,\,
-\bar c^P,\,
-\bar c^T,\,
-\tau^P,\,
-\tau^T,\,
-u^0
-\right)
-}
-\]
-
-加动态状态：
-
-\[
-\boxed{
-S(t)=
-\left(
-Q(t),W(t),H(t),L(t)
-\right)
-}
-\]
-
-加固定运行规则：
-
-\[
-\boxed{
-\text{capacity constraint}
+\text{Transport Capacity}
 +
-\text{input constraint}
+\text{Transport Delay}
+}
+\]
+
+输入边：
+
+\[
+\boxed{
+M\rightarrow P
+}
+\]
+
+额外保存投入系数：
+
+\[
+\boxed{
+a_{mp}
+}
+\]
+
+输出边：
+
+\[
+\boxed{
+P\rightarrow M
+}
+\]
+
+额外保存产出系数：
+
+\[
+\boxed{
+b_{pm}
+}
+\]
+
+当一个 \(P\) 的同一种产出供给多个下游时，相应 \(P\rightarrow M\) 分支再保存：
+
+\[
+\boxed{
+\rho_e
+}
+\]
+
+用于表达配给比例。
+
+库存间：
+
+\[
+\boxed{
+M\rightarrow M
+}
+\]
+
+只承担纯运输。
+
+\(P\) 保存生产能力、生产 delay 及生产流程自身的信息；\(M\) 保存唯一编号、物料、状态、位置、最大库存容量等信息。属性相同的库存实例不自动合并，各自拥有独立库存状态和动态历史。
+
+当前静态物理层最终包含：
+
+\[
+\boxed{
+\text{Inventory Identity}
 +
-\text{proportional rationing}
+\text{Inventory Capacity}
 +
-\text{fixed terminal demand}
+\text{Production Capacity}
++
+\text{Production Delay}
++
+\text{Transport Capacity}
++
+\text{Transport Delay}
++
+\text{Input/Output Coefficients}
++
+\text{Allocation Ratios}
 }
 \]
 
-于是：
+时间推进后，系统产生：
 
 \[
 \boxed{
-(G,\Theta,S_0,\text{shock})
-\Longrightarrow
-\text{unique trajectory}
+\text{Inventory}
++
+\text{WIP}
++
+\text{In-transit Flow}
++
+\text{Production Flow}
++
+\text{Transport Flow}
 }
 \]
 
-并可从轨迹中测量：
-
-\[
-\boxed{
-T^{arr},
-\quad
-A^{peak},
-\quad
-A^{cum},
-\quad
-L^{sys},
-\quad
-T^{recovery}
-}
-\]
-
-从而把问题 2 具体化为：
-
-\[
-\boxed{
-\text{哪些局部结构与物理参数组合}
-\Longrightarrow
-\text{哪些稳定的冲击传播规律？}
-}
-\]
-
-研究顺序建议为：
-
-\[
-\boxed{
-\text{motif analytic laws}
-\rightarrow
-\text{random-DAG simulation}
-\rightarrow
-\text{cross-network scaling laws}
-\rightarrow
-\text{theoretical verification}
-}
-\]
+这些动态状态共同构成供应链的时间演化，并用于研究局部生产冲击、物流冲击、库存缓冲、多源投入和一对多配给条件下的因果传播。
